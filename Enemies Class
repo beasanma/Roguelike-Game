@@ -1,0 +1,110 @@
+public abstract class Enemies implements ImageTile {
+    private Position position;
+    private int health;
+    private final int damageAmount;
+
+    public Enemies(Position Position, int health, int damageAmount) {
+        this.position = Position;
+        this.health = health;
+        this.damageAmount = damageAmount;
+    }
+
+    public void setPosition(Position position) {
+        this.position = position;
+    }
+
+    public int getHealth() {
+        return health;
+    }
+
+    @Override
+    public Position getPosition() {
+        return position;
+    }
+
+    // Movimento em direção ao herói
+    public void moveTowardsHero(Hero hero) {
+        int enemyPositionX = this.getPosition().getX();
+        int enemyPositionY = this.getPosition().getY();
+        int heroPositionX = hero.getPosition().getX();
+        int heroPositionY = hero.getPosition().getY();
+
+        // Move o inimigo na direção do herói, tentando igualar as posições
+        if (enemyPositionX < heroPositionX) {
+            position = position.plus(Direction.RIGHT.asVector()); // Move para a direita
+        }
+        // Se o inimigo está à direita do herói, mova-se para a esquerda
+        else if (enemyPositionX > heroPositionX) {
+            position = position.plus(Direction.LEFT.asVector());// Move para a esquerda
+        }
+        // Se o inimigo está abaixo do herói, mova-se para cima
+        else if (enemyPositionY < heroPositionY) {
+            position = position.plus(Direction.DOWN.asVector()); // Move para baixo
+        }
+        // Se o inimigo está acima do herói, mova-se para baixo
+        else if (enemyPositionY > heroPositionY) {
+            position = position.plus(Direction.UP.asVector()); // Move para cima
+        }
+    }
+
+    public void randomMovement() {
+
+        int randomNumb = (int) (Math.random() * 4); // multiplicar por 4 para indicar as 4 opções do switch-case
+        switch (randomNumb) {
+            case 0:
+                position = position.plus(Direction.UP.asVector()); //
+                break;
+            case 1:
+                position = position.plus(Direction.DOWN.asVector());
+                break;
+            case 2:
+                position = position.plus(Direction.LEFT.asVector());
+                break;
+            case 3:
+                position = position.plus(Direction.RIGHT.asVector());
+                break;
+            default:
+                break;
+        }
+    }
+
+    // FUNÇÃO - Se o herói estiver perto, persegue-o. Se não, move aleatoriamente
+    //move tem de receber posição do herói, função antes que separa os dois (1 if posição x e y for tal)
+    // e depois fazer o randommovement
+    public void move(Hero hero) {
+        int enemyPositionX = this.getPosition().getX();
+        int enemyPositionY = this.getPosition().getY();
+        int heroPositionX = hero.getPosition().getX();
+        int heroPositionY = hero.getPosition().getY();
+
+        //verificar se o inimigo está dentro do alcance do herói do intervalo
+        boolean inAttackRange = (enemyPositionX >= heroPositionX - 2 && enemyPositionX <= heroPositionX + 2) &&
+                (enemyPositionY >= heroPositionY - 2 && enemyPositionY <= heroPositionY + 2);
+
+        if (inAttackRange) {
+            moveTowardsHero(hero);
+            checkCombat(hero);
+        } else {
+            randomMovement();
+        }
+    }
+
+    public void damage(int damage) {
+        health = health - damage;
+        if (health <= 0) {
+            ImageMatrixGUI.getInstance().removeImage(this);
+        }
+    }
+
+    public void attack(Hero hero) {
+        hero.damage(damageAmount);
+    }
+
+    //inimigo faz o primeiro passo e herói contra-ataca (?)
+    public void checkCombat(Hero hero) {
+        if (this.getPosition().equals(hero.getPosition())) {
+            System.out.println("Enemy attacks the Hero!");
+            this.attack(hero); // O inimigo ataca
+        }
+    }
+}
