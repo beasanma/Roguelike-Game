@@ -1,0 +1,113 @@
+package pt.upskill.projeto1.objects.StatusBar;
+
+import pt.upskill.projeto1.gui.ImageMatrixGUI;
+import pt.upskill.projeto1.gui.ImageTile;
+import pt.upskill.projeto1.objects.Inventory.Inventory;
+import pt.upskill.projeto1.objects.Room;
+import pt.upskill.projeto1.rogue.utils.Direction;
+import pt.upskill.projeto1.rogue.utils.Position;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class StatusBar {
+    private final List<ImageTile> bar = new ArrayList<>();
+    private int health = 4;
+    private final List<ImageTile> inventory = new ArrayList<>();
+    private int fireballs = 3;
+    private Direction fireballDirection;
+    private Room currentRoom;
+
+
+    public void barTiles() {
+        bar.clear();
+        for (int x = 0; x < 10; x++) {
+            bar.add(new BlackTile(new Position(x, 0)));
+        }
+        //fireball
+        for (int x = 0; x < 3; x++) {
+            if (x < fireballs) {
+                bar.add(new FireBall(new Position(x, 0), fireballDirection, currentRoom));
+            } else {
+                bar.add(new BlackTile(new Position(x, 0)));
+            }
+        }
+        //green tile - correlação entre os tiles e a "health"
+
+        for (int x = 3; x < 7; x++) { // percorrer as posições
+            if (x < 3 + health) { // x < 3 + 4 = 7 = [3,4,5,6] = all Green // hero.getHealth() não dá para invocar
+                //diz que é nulo
+                bar.add(new GreenTile(new Position(x, 0)));
+            } else { // ex: 2 HP = x < 3 + 2 = 5 (inferior a 5 = 3,4 = Green)
+                // else RedTile - garante que o resto seja preenchido com os redTiles (5 = 3,4 = Green; 5,6 = Red)
+                bar.add(new RedTile(new Position(x, 0)));
+            }
+        }
+        for (int x = 7; x < 10; x++) { // [7,8,9] = 3 casas
+            int inventoryIndex = x - 7;
+            //inventoryIndex = 7 - 7 = 0 [pega o primeiro item]
+            //inventoryIndex = 8 - 7 = 1 [pega o segundo item]
+            //inventoryIndex = 9 - 7 = 2 [0,1,2] = 3 casas do inventário [pega o terceiro item]
+            if (inventoryIndex < inventory.size()) { //verifica se o index é menor que o tamanho do inventário
+                //obter um item do inventário com base no seu indice
+                Inventory item = (Inventory) inventory.get(inventoryIndex);
+                item.setPosition(new Position(x, 0)); // atualiza a posição dos itens
+                bar.add(item); // adiciona o item à lista 'bar' que guarda os tiles
+            } else { // adicionar blackTile quando não houver itens no inventório
+                bar.add(new BlackTile(new Position(x, 0)));
+            }
+            ImageMatrixGUI.getInstance().newStatusImages(bar);
+        }
+    }
+
+    public boolean addItem(Inventory item) {
+        if (inventory.size() < 3) { // se o inventário for menor que 3, adiciona item
+            inventory.add(item);
+            barTiles(); //atualiza os tiles
+            return true;
+        }
+        return false; // inventário cheio!
+    }
+
+    public List<ImageTile> getInventory() {
+        return inventory;
+    }
+
+    // largar item
+    public void dropItem(int index) {
+        if (index >= 0 && index < inventory.size()) {  // se o indice for 0 e inferior a 3
+            inventory.remove(index); //remove o indice do inventário
+            barTiles(); // atualiza a barra com as novas atualizações
+            ImageMatrixGUI.getInstance().newStatusImages(bar); // atualizar a interface gráfica com a lista!
+        }
+    }
+
+    // função em que o herói perde vida / barra tem que atualizar a nova informação!
+    public void loseLife(int quantity) {
+        health = health - quantity;
+        if (health < 0) {
+            health = 0; // A health não pode ser negativa!
+        }
+        bar.clear(); //limpa os elementos da barra e atualiza cada vez que o herói perde uma vida
+        barTiles(); // recria a barra com a nova informação dada pelo bar.clear()
+        ImageMatrixGUI.getInstance().newStatusImages(bar); //Atualizar a interface gráfica!!!!
+    }
+
+    public int getFireballs() {
+        return fireballs;
+    }
+
+    public void updateFireball() {
+        if (fireballs > 0) {
+            fireballs--;
+            barTiles();
+        } else {
+            System.out.println("No fireballs available!");
+        }
+    }
+
+    //função para devolver a lista
+    public List<ImageTile> getBarTiles() {
+        return bar;
+    }
+}
