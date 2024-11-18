@@ -1,0 +1,145 @@
+public class Hero implements ImageTile {
+
+    private Position position;
+    private int health;
+    private int damageAmount;
+    private StatusBar statusBar;
+
+    public Hero(Position position, int health, StatusBar statusBar) {
+        this.position = position;
+        this.health = health;
+        this.damageAmount = 1;
+        this.statusBar = statusBar;
+    }
+
+    public void setPosition(Position position) {
+        this.position = position;
+    }
+
+    public int getHealth() {
+        return health;
+    }
+
+    public StatusBar getStatusBar() {
+        return statusBar;
+    }
+
+    @Override
+    public String getName() {
+        return "Hero";
+    }
+
+    @Override
+    public Position getPosition() {
+        return position;
+    }
+
+    public void setDamageAmount(int damageAmount) {
+        this.damageAmount = damageAmount;
+    }
+
+    //função move que calcula a posição do herói somando o vetor da direção dada (UP, DOWN,...)
+    public void move(Direction direction) {
+        this.position = this.position.plus(direction.asVector()); // adiciona o vetor à posição do herói
+    }
+
+    public void damage(int damage) {
+        health = health - damage;
+        if (health < 0) {
+            health = 0;
+        }
+        statusBar.loseLife(damage); //atualiza a health do herói quando ele recebe dano
+    }
+
+    public void attack(Enemies enemy) {
+        enemy.damage(damageAmount);
+    }
+
+    // herói faz o primeiro passo
+    public void checkCombat(Enemies enemy, Position preCombatPosition) {
+        if (this.getPosition().equals(enemy.getPosition())) {
+            System.out.println("Hero attacks the Enemy!");
+            // Herói ataca primeiro
+            this.attack(enemy);
+
+            if (enemy.getHealth() > 0) {
+                this.position = preCombatPosition;
+            }
+        }
+    }
+
+    public void pickUpItem(Inventory item) {
+        if (item instanceof GoodMeat) {
+            System.out.println("Hero picked up: " + item.getName());
+            // "aumenta" a vida do herói quando ele apanha a carne
+            if (health < 4) {
+                gainLife(1);
+            } else {
+                System.out.println("Hero has full health!");
+            }
+        } else if (item instanceof Hammer) {
+            System.out.println("Hero picked up: " + item.getName());
+            setDamageAmount(2);
+// ainda a decidir se vou colocar no inventário:
+//            if (!statusBar.addItem(item)) {
+//                System.out.println("Inventory is full!");
+//            }
+        } else { // se não for a carne, adiciona o item à statusBar
+            if (statusBar.addItem(item)) {
+                System.out.println("Hero picked up: " + item.getName());
+            } else {
+                System.out.println("Inventory is full!");
+            }
+        }
+    }
+
+    public void dropItem(int index, Room currentRoom) {
+        //index < statusBar.getInventory().size() - garante que o índice não ultrapasse o "size" do inventário
+        //statusBar.getInventory() retorna a lista de itens
+        if (index >= 0 && index < statusBar.getInventory().size()) { // indice não pode ser negativo
+            //indice = [0,1,2]
+            // vai obter o item específico do inventário
+            Inventory item = (Inventory) statusBar.getInventory().get(index); // vai buscar o indice da lista de itens
+            // do inventário
+            // Define a posição onde o herói está  para soltar o item
+            System.out.println("Hero dropped: " + item.getName());
+            item.setPosition(this.getPosition());
+            currentRoom.getRoomMap().add(item); // Adiciona o item de volta ao mapa da sala
+            ImageMatrixGUI.getInstance().addImage(item); // Atualiza a interface gráfica
+            statusBar.dropItem(index); // Remove do inventário e atualiza a barra
+        }
+    }
+
+    public void gainLife(int quantity) {
+        health = health + quantity;
+        if (health > 4) {
+            health = 4;
+        }
+        System.out.println("Hero has " + health + " HP");
+        statusBar.loseLife(-quantity); // Atualiza a barra de status, adicionando vidas
+    }
+
+    public void useFireball(Direction direction, Room currentRoom) {
+        if (statusBar.getFireballs() > 0) {
+            FireBall fireball = new FireBall(this.position, direction, currentRoom);
+            currentRoom.getRoomMap().add(fireball); // adicionamos à sala
+            ImageMatrixGUI.getInstance().addImage(fireball);
+
+            FireBallThread fireBallThread = new FireBallThread(direction, fireball);
+            fireBallThread.run();
+
+            statusBar.updateFireball();
+        } else {
+            System.out.println("Hero ran out of fireballs!");
+        }
+    }
+
+    public boolean hasKey(String keyID) {
+        for (ImageTile item : statusBar.getInventory()) {
+            if (item instanceof Key key && key.getKeyId().equals(keyID)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
