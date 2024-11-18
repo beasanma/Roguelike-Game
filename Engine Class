@@ -1,0 +1,294 @@
+package pt.upskill.projeto1.game;
+
+import pt.upskill.projeto1.gui.ImageMatrixGUI;
+import pt.upskill.projeto1.gui.ImageTile;
+import pt.upskill.projeto1.objects.Characters.Enemies;
+import pt.upskill.projeto1.objects.Characters.Hero;
+import pt.upskill.projeto1.objects.Door.Door;
+import pt.upskill.projeto1.objects.Inventory.GoodMeat;
+import pt.upskill.projeto1.objects.Inventory.Hammer;
+import pt.upskill.projeto1.objects.Inventory.Key;
+import pt.upskill.projeto1.objects.Room;
+import pt.upskill.projeto1.objects.StatusBar.StatusBar;
+import pt.upskill.projeto1.rogue.utils.Direction;
+import pt.upskill.projeto1.rogue.utils.Position;
+
+import java.awt.event.KeyEvent;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Engine {
+
+    private Hero hero;
+    private Room currentRoom; // sala "atual" do herói
+    private int currentIndex = 0; // indice do currentRoom
+    ArrayList<Room> rooms = new ArrayList<>(); // lista das salas
+    ArrayList<Enemies> enemies = new ArrayList<>();
+    List<ImageTile> bar = new ArrayList<>();
+    private StatusBar statusBar;
+    private Position preMovePosition;
+    private int score;
+    private int lostPointsMovement = 1;
+    Direction playerDirection = null;
+
+    public void init() {
+        ImageMatrixGUI gui = ImageMatrixGUI.getInstance();
+        // Inicializa a barra de status
+        statusBar = new StatusBar();
+        statusBar.barTiles(); // adiciona à barra
+        bar = statusBar.getBarTiles(); // obtém a lista
+
+        rooms.add(new Room("rooms/rooms/room0.txt"));
+
+        for (Room room : rooms) {
+            room.updateEnemies(); // Ensure each room has its enemies list populated
+            enemies.addAll(room.getEnemies()); // Add all room enemies to the global list
+        }
+
+        currentRoom = rooms.get(currentIndex);
+
+        List<ImageTile> tiles = currentRoom.getRoomMap(); // vai buscar a lista de imagens na classe Room
+
+        enemies.clear();
+        for (ImageTile tile : tiles) {
+            if (tile instanceof Enemies) {
+                enemies.add((Enemies) tile); // adiciona os inimigos à lista de imagens
+            }
+        }
+        tiles.addAll(enemies);
+
+        hero = new Hero(new Position(3, 6), 4, statusBar); //associa a barra de status e as vidas ao herói
+        currentRoom.setHero(hero);
+        tiles.add(hero);
+
+
+        gui.setEngine(this);
+        gui.newImages(tiles);
+        gui.newStatusImages(bar); // atualiza a status bar após obter a lista
+        gui.go();
+
+        gui.setStatus("Game start!");
+
+        while (true) {
+            gui.update();
+        }
+    }
+
+    public void notify(int keyPressed) {
+
+        if (keyPressed == KeyEvent.VK_DOWN) {
+            System.out.println("User pressed down key!");
+            playerDirection = Direction.DOWN; // chamar a direção - key down = hero move down
+        }
+        if (keyPressed == KeyEvent.VK_UP) {
+            System.out.println("User pressed up key!");
+            playerDirection = Direction.UP;
+        }
+        if (keyPressed == KeyEvent.VK_LEFT) {
+            System.out.println("User pressed left key!");
+            playerDirection = Direction.LEFT;
+        }
+        if (keyPressed == KeyEvent.VK_RIGHT) {
+            System.out.println("User pressed right key!");
+            playerDirection = Direction.RIGHT;
+        }
+        //Largar objetos!!!
+        if (keyPressed == KeyEvent.VK_1) {
+            System.out.println("User pressed key 1!");
+            hero.dropItem(0, currentRoom);
+        }
+        if (keyPressed == KeyEvent.VK_2) {
+            System.out.println("user pressed key 2!");
+            hero.dropItem(1, currentRoom);
+        }
+        if (keyPressed == KeyEvent.VK_3) {
+            System.out.println("user pressed key 3!");
+            hero.dropItem(2, currentRoom);
+        }
+        if (keyPressed == KeyEvent.VK_SPACE) {
+            System.out.println("Hero shoots a fireball!");
+            hero.useFireball(playerDirection, currentRoom);
+
+            playerDirection = null;
+        }
+        if (playerDirection != null) {
+
+            if (hero.getHealth() <= 0) {
+                System.out.println("The Hero was defeated. Game over!");
+                gameOver();
+                currentRoom.getRoomMap().remove(hero); // remove o hero do mapa da sala
+                ImageMatrixGUI.getInstance().removeImage(hero); //// remove da interface gráfica
+
+            } else {
+
+                Position newPosition = hero.getPosition().plus(playerDirection.asVector()); // Calcula a nova posição do herói
+
+                // Verifica se o herói pode se mover para a nova posição
+                if (!currentRoom.collisionHero(newPosition)) {
+                    // Se não houver obstáculos, o herói move
+                    scoreMovement(); // obter score antes do herói se mover
+
+                    preMovePosition = hero.getPosition();
+                    hero.move(playerDirection);
+
+                    heroPicksUpItem(newPosition);
+                    checkDoors();
+
+                    // Verifica o combate com os inimigos
+                    for (Enemies enemy : enemies) {
+                        hero.checkCombat(enemy, preMovePosition); // O herói verifica se há combate
+                    }
+                } else {
+                    System.out.println("Hero can't move through walls!");
+                }
+            }
+        }
+
+        // Movimento dos inimigos e combate
+        for (Enemies enemy : enemies) {
+
+            if (enemy.getHealth() <= 0) {
+                System.out.println("The Enemy was defeated!");
+                enemies.remove(enemy); // // remove o inimigo da lista
+                currentRoom.getRoomMap().remove(enemy); // remove o inimigo do mapa da sala
+                ImageMatrixGUI.getInstance().removeImage(enemy); //// remove da interface gráfica
+                scoreDefeatEnemy(enemy.getName());
+                break;
+
+            } else {
+                Position startPosition = enemy.getPosition(); // Posição inicial do inimigo
+
+                enemy.move(hero);
+
+                // Verifica se houve colisão com outro inimigo ou qualquer obstáculo
+                if (currentRoom.collisionEnemy(enemy.getPosition(), enemy)) {
+                    // Se houve colisão, o inimigo volta à posição inicial
+                    enemy.setPosition(startPosition);
+                } else {
+//                    // Caso contrário, o inimigo segue para a nova posição
+//                    // O inimigo pode realizar o combate com o herói após o movimento
+
+                    enemy.checkCombat(hero);
+                }
+            }
+        }
+    }
+
+    public void heroPicksUpItem(Position newPosition) {
+
+        List<ImageTile> roomTiles = currentRoom.getRoomMap(); // obtém a lista de tiles da sala atual
+
+        // itera sobre a lista
+        for (ImageTile tile : roomTiles) {
+            if (tile.getPosition().equals(newPosition)) { // se a posição for igual ao do herói, ele vai apanhar o item
+                if (tile instanceof GoodMeat) {
+                    hero.pickUpItem((GoodMeat) tile); // apanha o "tile" da carne
+                    roomTiles.remove(tile); //remove da sala
+                    ImageMatrixGUI.getInstance().removeImage(tile); // atualizar o GUI!!!!!!
+                    scorePickUpItem("GoodMeat"); // obtém o score do item apanhado
+                    break; // não esquecer do break!!!
+                } else if (tile instanceof Hammer) {
+                    hero.pickUpItem((Hammer) tile);
+                    roomTiles.remove(tile);
+                    ImageMatrixGUI.getInstance().removeImage(tile);
+                    scorePickUpItem("Hammer");
+                    break;
+                } else if (tile instanceof Key) {
+                    hero.pickUpItem((Key) tile);
+                    roomTiles.remove(tile);
+                    ImageMatrixGUI.getInstance().removeImage(tile);
+                    scorePickUpItem("Key");
+                    break;
+                }
+            }
+        }
+    }
+
+    // Nova função para verificar se o herói está em cima de uma porta
+    private void checkDoors() {
+        List<Door> doorsList = currentRoom.getDoorsList(); // Agora esta linha deve funcionar
+        for (Door door : doorsList) {
+            if (door.inPosition(hero.getPosition())) { // Verifica se o herói está na posição da porta
+                if (door.openDoor(hero, door.getKeyName())) { //se o herói possuir a chave necessária para abrir a porta
+                    currentRoom.changeRooms(hero, door); // muda de salas
+                    updateRoom();
+                }
+                break;
+            }
+        }
+    }
+
+    // Função para atualizar a lista de tiles e inimigos após troca de salas
+    private void updateRoom() {
+        enemies.clear(); // Limpa a lista de inimigos da sala anterior
+        currentRoom.updateEnemies(); // Refresh enemies for the new room
+        enemies.addAll(currentRoom.getEnemies());
+        List<ImageTile> tiles = currentRoom.getRoomMap();
+
+        for (ImageTile tile : tiles) {
+            if (tile instanceof Enemies) {
+                enemies.add((Enemies) tile);
+            }
+        }
+        tiles.addAll(enemies);
+        tiles.add(hero);
+
+        ImageMatrixGUI.getInstance().newImages(tiles);
+    }
+
+    public void scoreMovement() {
+        score = score - lostPointsMovement;
+        if (score < 0) {
+            score = 0;
+        }
+        System.out.println("score after moving: " + score);
+    }
+
+    public void scorePickUpItem(String item) {
+        int pointsObtained = switch (item) {
+            case "GoodMeat" -> 10;
+            case "Hammer" -> 25;
+            case "Key" -> 5;
+            default -> 0;
+        };
+        score = score + pointsObtained;
+        System.out.println("score after picking up item: " + score);
+    }
+
+    public void scoreDefeatEnemy(String enemy) {
+        System.out.println("Enemy defeated: " + enemy);
+        int pointsObtained = switch (enemy) {
+            case "Bat", "BadGuy", "Skeleton" -> 10;
+            case "Thief" -> 15;
+            default -> 0;
+        };
+        score = score + pointsObtained;
+        System.out.println("Score after defeating enemy: " + score);
+    }
+
+    public void saveScoreFile() {
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        LocalDateTime now = LocalDateTime.now();
+        String formattedDateTime = now.format(dateTimeFormatter);
+        try (FileWriter file = new FileWriter("src/pt/upskill/projeto1/objects/Leaderboard.txt", true)) {
+            file.write("Score: " + score + " | Date: " + formattedDateTime + "\n");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void gameOver() {
+        saveScoreFile();
+        ImageMatrixGUI.getInstance().showMessage("you lost!", "GAME OVER!");
+        ImageMatrixGUI.getInstance().dispose();
+    }
+
+    public static void main(String[] args) {
+        Engine engine = new Engine();
+        engine.init();
+    }
+}
